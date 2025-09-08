@@ -1,2 +1,2 @@
-# MeanFlow_Handwritten_Digits
+# MeanFlow Handwritten Digits
 Generating handrwritten digits using trained MeanFlow model.
