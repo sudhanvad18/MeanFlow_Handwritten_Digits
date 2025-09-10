@@ -102,7 +102,7 @@ Total training loss:
 ### Running Training
 ```bash
 python meanflow_mnist_optimized.py
-
+```
 
 ---
 
