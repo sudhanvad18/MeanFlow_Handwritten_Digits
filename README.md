@@ -46,20 +46,63 @@ Install dependencies:
 
 ```bash
 pip install torch torchvision
-
---- 
-## 🚀 Training
-
-Run the main script:
 ```
+---
+
+## 🏋️ Training
+
+The training loop follows the **MeanFlow** paradigm, combining **flow matching** and **average velocity** constraints.
+
+### Training Objective
+The loss function has two parts:
+
+1. **Flow Matching Loss**  
+   Ensures the model learns the correct instantaneous velocity field:  
+   \[
+   \mathcal{L}_{FM} = \| v_\theta(z_t, t) - (x - z_t) \|^2
+   \]
+
+2. **Average Velocity Loss**  
+   Matches the velocity at \( t = 0 \) to the average velocity across random time points:  
+   \[
+   \mathcal{L}_{AVG} = \| v_\theta(z_0, 0) - \bar{v} \|^2
+   \]
+
+Total training loss:  
+\[
+\mathcal{L} = \mathcal{L}_{FM} + \lambda \cdot \mathcal{L}_{AVG}
+\]
+
+---
+
+### Training Setup
+- **Dataset**: MNIST (handwritten digits, 28×28 grayscale).  
+- **Optimizer**: AdamW with weight decay.  
+- **Learning Rate**: Cosine annealing schedule.  
+- **EMA (Exponential Moving Average)**: Maintains a smoothed copy of weights for more stable sampling.  
+- **Checkpointing**: Saves both model and EMA weights every few steps.  
+
+---
+
+### Training Loop Outline
+1. Sample a minibatch \( x \) from MNIST.  
+2. Sample Gaussian noise \( z_0 \).  
+3. Interpolate:  
+   \[
+   z_t = (1 - t) z_0 + t x
+   \]
+4. Compute **flow matching** and **average velocity** losses.  
+5. Backpropagate, clip gradients, and update weights.  
+6. Periodically:  
+   - Save checkpoints.  
+   - Generate sample digits for visual monitoring.  
+
+---
+
+### Running Training
+```bash
 python meanflow_mnist_optimized.py
-Training will:
 
-Save checkpoints every 1000 steps (default).
-
-Generate sample grids to samples/.
-
-Save the final sample grid to outputs/mnist_digits_final.png.
 
 ---
 
