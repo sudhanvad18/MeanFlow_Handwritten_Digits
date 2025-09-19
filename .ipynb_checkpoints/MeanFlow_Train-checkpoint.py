@@ -1,5 +1,3 @@
-so what changes are required:
-
 # meanflow_mnist_optimized.py
 """
 Improved MeanFlow for MNIST with:
