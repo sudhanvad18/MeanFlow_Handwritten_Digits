@@ -1,4 +1,4 @@
-# generate.py
+# Generate.py
 """
 Generate MNIST samples from a trained MeanFlow model.
 Uses EMA weights if available.
