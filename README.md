@@ -1,203 +1,90 @@
-# MeanFlow-MNIST (Optimized)
+# MNIST Flow Experiments
 
-🚀 An optimized PyTorch implementation of **MeanFlow generative modeling** applied to **MNIST digits**.  
-This project combines flow-matching training objectives with modern architectural and optimization improvements to achieve **stable training, high-quality samples, and efficient inference**.
+An experimental PyTorch project exploring time-conditioned image generation on handwritten digits: a residual U-Net, Fourier time embeddings, and multi-step Heun sampling.
 
----
+[Generate samples](#generate-samples) · [Train](#train) · [Implementation notes](docs/implementation.md)
 
-## 🔑 Key Features
+<table>
+  <tr><th>Saved initial sample</th><th>Saved sample at step 120,000</th></tr>
+  <tr>
+    <td><img src="docs/assets/sample-start.png" alt="An eight by eight grid of noisy outputs saved at the beginning of an existing training run" width="280"></td>
+    <td><img src="docs/assets/sample-step-120000.png" alt="An eight by eight grid of digit-like but visibly noisy outputs saved at step 120000" width="280"></td>
+  </tr>
+</table>
 
-- **Flow Matching Training** ([Lipman et al., 2023](https://arxiv.org/abs/2210.02747)):  
-  Learns a neural ODE that directly matches the true data velocity field.
-- **Fourier Time Embeddings**:  
-  Encodes scalar time `t` into high-dimensional features with sinusoidal frequencies for stronger conditioning.
-- **UNet Backbone with Residual Blocks**:  
-  Lightweight but expressive architecture tailored for MNIST (28×28), with skip connections and residual refinement.
-- **Average Velocity Loss**:  
-  Adds stability by matching the velocity at `t=0` to a Monte Carlo average over intermediate times.
-- **Heun’s Method Sampler**:  
-  A second-order ODE solver for better numerical stability and sharper generated samples.
-- **Exponential Moving Average (EMA) Weights**:  
-  Ensures smoother convergence and higher-quality samples at inference.
-- **Cosine Learning Rate Scheduler + Checkpointing**:  
-  Efficient training with automatic restarts and state saving (including EMA state).
+*Actual saved outputs from this repository. These grids show an exploratory result, with substantial noise and incomplete digit structure. The training configuration and random seed for these historical images were not recorded.*
 
----
+## What is implemented
 
-## 📂 Project Structure
+- A U-Net-style convolutional model with residual blocks and Fourier time conditioning.
+- A local velocity-regression loss plus a Monte Carlo average-velocity penalty.
+- AdamW optimization, cosine learning-rate decay, gradient clipping, and resumable model/optimizer checkpoints.
+- Heun integration from Gaussian noise to a grid of 28 × 28 images.
 
-├── meanflow_mnist_optimized.py # Main training & sampling script
-├── samples/ # Generated MNIST samples during training
-├── checkpoints/ # Saved checkpoints (model + optimizer + EMA)
-├── data/ # MNIST dataset (downloaded automatically)
-└── README.md # Project documentation
+The repository name reflects an exploration inspired by MeanFlow. The implemented objective and multi-step sampler differ from the published one-step method; this is an experiment, not a reproduction of the paper's results. See the [method comparison](docs/implementation.md#relationship-to-flow-matching-and-meanflow).
 
+## Setup
 
----
+Use Python 3.10 or later and a matched PyTorch/torchvision installation. CUDA is used when available; otherwise the scripts use CPU. Training can be expensive on CPU.
 
-## ⚙️ Requirements
-
-- Python 3.9+
-- PyTorch ≥ 2.0
-- torchvision
-- CUDA GPU recommended (for speed)
-
-Install dependencies:
-
-```bash
-pip install torch torchvision
-```
----
-
-## 🏋️ Training
-
-The training loop follows the **MeanFlow** paradigm, combining **flow matching** and **average velocity** constraints.
-
-### Training Objective
-The loss function has two parts:
-
-1. **Flow Matching Loss**  
-   Ensures the model learns the correct instantaneous velocity field:  
-   \[
-   \mathcal{L}_{FM} = \| v_\theta(z_t, t) - (x - z_t) \|^2
-   \]
-
-2. **Average Velocity Loss**  
-   Matches the velocity at \( t = 0 \) to the average velocity across random time points:  
-   \[
-   \mathcal{L}_{AVG} = \| v_\theta(z_0, 0) - \bar{v} \|^2
-   \]
-
-Total training loss:  
-\[
-\mathcal{L} = \mathcal{L}_{FM} + \lambda \cdot \mathcal{L}_{AVG}
-\]
-
----
-
-### Training Setup
-- **Dataset**: MNIST (handwritten digits, 28×28 grayscale).  
-- **Optimizer**: AdamW with weight decay.  
-- **Learning Rate**: Cosine annealing schedule.  
-- **EMA (Exponential Moving Average)**: Maintains a smoothed copy of weights for more stable sampling.  
-- **Checkpointing**: Saves both model and EMA weights every few steps.  
-
----
-
-### Training Loop Outline
-1. Sample a minibatch \( x \) from MNIST.  
-2. Sample Gaussian noise \( z_0 \).  
-3. Interpolate:  
-   \[
-   z_t = (1 - t) z_0 + t x
-   \]
-4. Compute **flow matching** and **average velocity** losses.  
-5. Backpropagate, clip gradients, and update weights.  
-6. Periodically:  
-   - Save checkpoints.  
-   - Generate sample digits for visual monitoring.  
-
----
-
-### Running Training
-```bash
-python meanflow_mnist_optimized.py
+```sh
+git clone https://github.com/sudhanvad18/MeanFlow_Handwritten_Digits.git
+cd MeanFlow_Handwritten_Digits
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
----
+For a specific GPU installation, follow the [PyTorch installation selector](https://pytorch.org/get-started/locally/).
 
-## 📊 Model Overview
+## Generate samples
 
-### Fourier Time Embedding
-Encodes time *t* into a feature vector:
+Run from the repository root with the compatible checkpoint at `checkpoints/meanflow_mnist.pth`. That checkpoint is tracked in the inspected repository state.
 
-\[
-\phi(t) = \text{MLP}\big[ \sin(\omega t), \cos(\omega t) \big]
-\]
+```sh
+python generate.py
+```
 
-with logarithmically spaced frequencies.
+This writes 64 samples to `outputs/generated_digits.png`, using 200 Heun steps by default. Each step performs two model evaluations. For a smaller generation run:
 
----
+```sh
+N_SAMPLES=8 SAMPLE_STEPS=20 OUTPUT_FILE=preview.png python generate.py
+```
 
-### UNet + Residual Blocks
-- **Downsampling path**: convolutional feature extraction.  
-- **Bottleneck**: residual refinement with time conditioning.  
-- **Upsampling path**: skip connections and reconstruction.  
+Samples start from newly drawn noise, so repeated runs differ. A missing checkpoint produces a `FileNotFoundError`; generation does not download MNIST.
 
----
+## Train
 
-### Loss Function
-The training objective is a combination:
+```sh
+python MeanFlow_Train.py
+```
 
-\[
-\mathcal{L} = 
-\underbrace{\| v_\theta(z_t, t) - (x - z_t) \|^2}_{\text{Flow Matching}}
-+ \lambda \,
-\underbrace{\| v_\theta(z_0, 0) - \bar{v} \|^2}_{\text{Average Velocity}}
-\]
+Training downloads MNIST into `data/`, writes sample grids into `samples/`, and saves to `checkpoints/meanflow_mnist.pth`. Configuration lives at the top of `MeanFlow_Train.py`.
 
-## 📈 Results
+**Checkpoint behavior matters:** the inspected checkpoint records step 120,000, while the script defaults to `MAX_STEPS = 100000`. With that checkpoint, the loop performs no further training. Move the existing checkpoint to a backup location before a fresh run, or set a higher `MAX_STEPS` to continue. Optimizer state is restored, but the scheduler and random-number state are not.
 
-The model generates MNIST-like handwritten digits using the MeanFlow approach.  
-After sufficient training (≈50k steps), digits become increasingly clear and structured.
+## Project map
 
-### Qualitative Samples
-Generated images show progressive improvement in digit quality as training advances:
+| Path | Purpose |
+| --- | --- |
+| `MeanFlow_Train.py` | Model, losses, sampler, and training entry point |
+| `generate.py` | Generation from saved weights |
+| `docs/implementation.md` | Objective details, configuration, and limitations |
+| `docs/assets/` | Small, curated copies of existing outputs |
+| `tests/test_entrypoints.py` | Import-safety regression checks |
 
-- **Early training (~10k steps):** blurry, noisy shapes without clear digit structure.  
-- **Mid training (~30k steps):** digits start forming but remain fuzzy.  
-- **Later training (~50k steps):** sharp digits resembling MNIST samples, though with occasional artifacts.  
+## Checks and current scope
 
-<p align="center">
-  <img src="samples/mnist_digits.png" alt="Generated MNIST Digits" width="400">
-</p>
+```sh
+python -m unittest discover -s tests -v
+```
 
-### Key Observations
-- Increasing the number of sampling steps (e.g., 50 → 100) improves sharpness.  
-- EMA (Exponential Moving Average) weights further stabilize outputs.  
-- Model capacity (base channels) directly influences clarity vs. memory usage.  
+The existing outputs are qualitative examples. FID, inference latency, and comparisons with baselines have not been established. EMA loading is supported when a checkpoint contains EMA weights, but the current training path disables EMA and the inspected checkpoint contains none.
 
----
-## 📚 References & Future Work
+## Background
 
-### References
-This work builds on the foundations of **flow matching** and **MeanFlow** models:
+- Lipman et al., [Flow Matching for Generative Modeling](https://arxiv.org/abs/2210.02747), ICLR 2023.
+- Geng et al., [Mean Flows for One-step Generative Modeling](https://arxiv.org/abs/2505.13447), NeurIPS 2025; [official implementation](https://github.com/Gsunshine/meanflow).
+- The previous README also referenced [haidog-yaqub/MeanFlow](https://github.com/haidog-yaqub/MeanFlow), an unofficial PyTorch implementation.
 
-- Lipman, Yaron, et al. *"Flow Matching for Generative Modeling."* (NeurIPS 2023)  
-- Albergo, Michael S., et al. *"Building normalizing flows with stochastic interpolants."* (ICML 2023)  
-- Official MeanFlow GitHub: [haidog-yaqub/MeanFlow](https://github.com/haidog-yaqub/MeanFlow)  
-
-The training code and architecture here are adapted for the **MNIST** dataset, with practical modifications:
-- Fourier time embeddings for richer temporal encoding.  
-- UNet backbone with residual connections for improved capacity.  
-- Heun’s method for more stable ODE integration.  
-- Combined **flow matching** + **average-velocity** losses.  
-
----
-
-### 🚀 Future Work
-There are several directions to push this project further:
-
-1. **Higher-Resolution Datasets**  
-   Extend beyond MNIST (28×28) to datasets like **CIFAR-10** (32×32) or **CelebA** (64×64+).  
-   This would test scalability and generalization.
-
-2. **Stronger Architectures**  
-   - Replace UNetSmall with a full UNet backbone or Transformer blocks.  
-   - Explore attention mechanisms for structured generation.  
-
-3. **Advanced Samplers**  
-   - Investigate adaptive ODE solvers (e.g., RK45) instead of fixed Heun/Euler steps.  
-   - Incorporate variance reduction for faster sampling.  
-
-4. **Hybrid Training Objectives**  
-   - Blend MeanFlow with diffusion-style noise prediction.  
-   - Explore score distillation loss variants.  
-
-5. **Evaluation Metrics**  
-   - Add FID (Fréchet Inception Distance) or IS (Inception Score) to benchmark results.  
-   - Compare with diffusion baselines on MNIST and CIFAR.  
-
----
-
-📌 *This project currently demonstrates the viability of MeanFlow on MNIST. Future expansions aim to bridge the gap between academic research and practical large-scale generative modeling.*  
+These references provide background; this repository makes no claim to reproduce their reported results.

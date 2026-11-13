@@ -7,7 +7,7 @@ Uses EMA weights if available.
 import os
 import torch
 from torchvision import utils
-from meanflow_mnist_optimized import (
+from MeanFlow_Train import (
     UNetSmall, FourierTimeEmbed, unnormalize_img,
     sample_and_save, CHECKPOINT_FILE, DEVICE
 )
@@ -25,7 +25,7 @@ def load_model_and_temembed(checkpoint_file=CHECKPOINT_FILE):
         raise FileNotFoundError(f"❌ No checkpoint found at {checkpoint_file}")
 
     ck = torch.load(checkpoint_file, map_location=DEVICE)
-    model.load_state_dict(ck["ema_state"] or ck["model_state"])
+    model.load_state_dict(ck.get("ema_state") or ck["model_state"])
     tembed.load_state_dict(ck["tembed_state"])
     model.eval()
     print(f"✅ Loaded model from {checkpoint_file}")

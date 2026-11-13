@@ -1,4 +1,4 @@
-# meanflow_mnist_optimized.py
+# MeanFlow_Train.py
 """
 Improved MeanFlow for MNIST with:
  - Fourier time embedding
@@ -42,8 +42,10 @@ transform = transforms.Compose([
 def unnormalize_img(x):
     return (x + 1.0) * 0.5
 
-train_ds = datasets.MNIST(root="data", train=True, download=True, transform=transform)
-train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=torch.cuda.is_available())
+def make_train_loader():
+    """Load MNIST only when training is explicitly requested."""
+    train_ds = datasets.MNIST(root="data", train=True, download=True, transform=transform)
+    return DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=torch.cuda.is_available())
 
 # ---------------- Fourier Time embedding ----------------
 class FourierTimeEmbed(nn.Module):
@@ -225,6 +227,7 @@ def load_checkpoint_if_exists(model, tembed, optimizer=None, ema_model=None, fna
 
 # ---------------- Training loop ----------------
 def train():
+    train_loader = make_train_loader()
     # reduce channels back to 128 to fit memory
     model = UNetSmall(time_dim=128, base_ch=128).to(DEVICE)
     tembed = FourierTimeEmbed(dim=128, scale=50.0).to(DEVICE)
